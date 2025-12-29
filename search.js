@@ -57,12 +57,13 @@ function isVideoInPlaylist(playlist, videoId) {
   return false;
 }
 
-function isVideoInAnyPlaylist(user, videoId) {
-  if (!user.playlists) return false;
+function countPlaylistsContaining(user, videoId) {
+  if (!user || !user.playlists) return 0;
+  var c = 0;
   for (var i = 0; i < user.playlists.length; i++) {
-    if (isVideoInPlaylist(user.playlists[i], videoId)) return true;
+    if (isVideoInPlaylist(user.playlists[i], videoId)) c++;
   }
-  return false;
+  return c;
 }
 
 function setQueryString(q) {
@@ -155,6 +156,33 @@ function addVideoToPlaylist(playlistName, video) {
   return idx;
 }
 
+function removeVideoFromPlaylistByName(playlistName, videoId) {
+  var user = getCurrentUser();
+  if (!user) return false;
+  ensureFavoritesPlaylist(user);
+
+  var idx = findPlaylistIndexByName(user, playlistName);
+  if (idx < 0) return false;
+
+  var pl = user.playlists[idx];
+  if (!pl.videos) pl.videos = [];
+
+  var newVideos = [];
+  var removed = false;
+
+  for (var i = 0; i < pl.videos.length; i++) {
+    if (pl.videos[i].videoId === videoId) removed = true;
+    else newVideos.push(pl.videos[i]);
+  }
+
+  if (!removed) return false;
+
+  pl.videos = newVideos;
+  setCurrentUser(user);
+  upsertLocalUser(user);
+  return true;
+}
+
 function isInFavorites(videoId) {
   var user = getCurrentUser();
   ensureFavoritesPlaylist(user);
@@ -163,7 +191,13 @@ function isInFavorites(videoId) {
   return isVideoInPlaylist(user.playlists[idx], videoId);
 }
 
-function addToFavorites(video) {
+function toggleFavorites(video) {
+  var inFav = isInFavorites(video.videoId);
+  if (inFav) {
+    var ok = removeVideoFromPlaylistByName("Favorites", video.videoId);
+    if (ok) showToast("Removed from <b>Favorites</b> ✓");
+    return;
+  }
   addVideoToPlaylist("Favorites", video);
 }
 
@@ -216,7 +250,8 @@ function renderPlaylistDropdown(video) {
 
     setModalMsg("success", "Added to " + name + " ✓");
     renderPlaylistDropdown(selectedVideo);
-    updateAddToPlaylistButton(selectedVideo.videoId);
+
+    updateCardUI(selectedVideo.videoId);
   };
 }
 
@@ -227,7 +262,9 @@ var playerFrameEl = null;
 function openPlayer(video) {
   if (!video || !video.videoId) return;
   playerTitleEl.innerText = video.title || "Player";
-  playerFrameEl.src = "https://www.youtube.com/embed/" + video.videoId + "?autoplay=1";
+  playerFrameEl.src =
+    "https://www.youtube-nocookie.com/embed/" + video.videoId +
+    "?autoplay=1&origin=" + encodeURIComponent(window.location.origin);
   new bootstrap.Modal(playerModalEl).show();
 }
 
@@ -259,7 +296,7 @@ function fetchSearchPage(q, pageToken) {
 function fetchVideoDetailsByIds(ids) {
   var url =
     "https://www.googleapis.com/youtube/v3/videos" +
-    "?part=snippet,contentDetails,statistics" +
+    "?part=snippet,contentDetails,statistics,status" +
     "&id=" + encodeURIComponent(ids.join(",")) +
     "&key=" + encodeURIComponent(API_KEY);
 
@@ -324,6 +361,58 @@ function loadMore() {
     });
 }
 
+function ensureCardBadge(videoId) {
+  var card = document.getElementById("card_" + videoId);
+  if (!card) return;
+
+  var user = getCurrentUser();
+  ensureFavoritesPlaylist(user);
+
+  var count = countPlaylistsContaining(user, videoId);
+  var badge = card.querySelector(".added-badge");
+
+  if (count > 0) {
+    if (!badge) {
+      var s = document.createElement("span");
+      s.className = "badge text-bg-success added-badge";
+      s.innerText = "✓";
+      card.appendChild(s);
+    }
+  } else {
+    if (badge) badge.remove();
+  }
+}
+
+function updateFavoriteButton(videoId) {
+  var btn = document.getElementById("fav_" + videoId);
+  if (!btn) return;
+
+  var added = isInFavorites(videoId);
+  btn.className = "btn btn-sm " + (added ? "btn-danger" : "btn-outline-danger");
+  btn.innerText = added ? "♥ Added ✓" : "♡ Add to Favorites";
+}
+
+function updateAddToPlaylistButton(videoId) {
+  var btn = document.getElementById("addpl_" + videoId);
+  if (!btn) return;
+
+  var user = getCurrentUser();
+  if (!user) return;
+
+  ensureFavoritesPlaylist(user);
+  var inAny = countPlaylistsContaining(user, videoId) > 0;
+
+  btn.className = "btn btn-sm " + (inAny ? "btn-secondary" : "btn-primary");
+  btn.innerText = "Add to playlist";
+  btn.disabled = false;
+}
+
+function updateCardUI(videoId) {
+  updateFavoriteButton(videoId);
+  updateAddToPlaylistButton(videoId);
+  ensureCardBadge(videoId);
+}
+
 function appendResults(videos) {
   var results = document.getElementById("results");
 
@@ -334,6 +423,8 @@ function appendResults(videos) {
 
   for (var i = 0; i < videos.length; i++) {
     var v = videos[i];
+    if (!v || !v.id) continue;
+    if (!v.status || v.status.embeddable !== true) continue;
 
     var videoObj = {
       videoId: v.id,
@@ -343,33 +434,33 @@ function appendResults(videos) {
       duration: v.contentDetails && v.contentDetails.duration ? v.contentDetails.duration : "PT0S"
     };
 
-    var alreadyAny = isVideoInAnyPlaylist(user, videoObj.videoId);
     var favAdded = isInFavorites(videoObj.videoId);
+    var inAny = countPlaylistsContaining(user, videoObj.videoId) > 0;
 
     var card = document.createElement("div");
-    card.className = "card shadow-sm mb-3 video-card";
-
-    var addPlBtnClass = alreadyAny ? "btn-secondary btn-added" : "btn-primary";
-    var addPlBtnText = alreadyAny ? "Added ✓" : "Add to playlist";
-    var addPlBtnDisabled = alreadyAny ? "disabled" : "";
+    card.id = "card_" + videoObj.videoId;
+    card.className = "card shadow-sm mb-3 video-card position-relative";
 
     var favBtnClass = favAdded ? "btn-danger" : "btn-outline-danger";
     var favText = favAdded ? "♥ Added ✓" : "♡ Add to Favorites";
 
+    var badgeHtml = inAny ? '<span class="badge text-bg-success added-badge">✓</span>' : "";
+
     card.innerHTML =
+      badgeHtml +
       '<div class="card-body">' +
       '<div class="row g-3 align-items-center">' +
       '<div class="col-md-4">' +
       '<img class="thumb" id="img_' + videoObj.videoId + '" src="' + videoObj.thumbnail + '" alt="thumb" />' +
       '</div>' +
       '<div class="col-md-8">' +
-      '<h5 class="mb-2 clickable-title" id="ttl_' + videoObj.videoId + '">' + videoObj.title + '</h5>' +
+      '<h5 class="mb-2 clickable-title video-title" title="' + String(videoObj.title || "").replace(/"/g, "&quot;") + '" id="ttl_' + videoObj.videoId + '">' + videoObj.title + '</h5>' +
       '<div class="text-muted mb-3">' +
       'Duration: ' + durationISOToText(videoObj.duration) +
       ' | Views: ' + videoObj.views +
       '</div>' +
       '<div class="d-flex gap-2 flex-wrap">' +
-      '<button class="btn btn-sm ' + addPlBtnClass + '" id="addpl_' + videoObj.videoId + '" ' + addPlBtnDisabled + '>' + addPlBtnText + '</button>' +
+      '<button class="btn btn-sm ' + (inAny ? "btn-secondary" : "btn-primary") + '" id="addpl_' + videoObj.videoId + '">Add to playlist</button>' +
       '<button class="btn btn-sm ' + favBtnClass + '" id="fav_' + videoObj.videoId + '">' + favText + '</button>' +
       '</div>' +
       '</div>' +
@@ -386,40 +477,19 @@ function appendResults(videos) {
       if (ttlEl) ttlEl.onclick = function () { openPlayer(vo); };
 
       var addBtn = document.getElementById("addpl_" + vo.videoId);
-      if (addBtn) {
-        addBtn.onclick = function () { openPlaylistModal(vo); };
+      if (addBtn) addBtn.onclick = function () { openPlaylistModal(vo); };
+
+      var favBtn = document.getElementById("fav_" + vo.videoId);
+      if (favBtn) {
+        favBtn.onclick = function () {
+          toggleFavorites(vo);
+          updateCardUI(vo.videoId);
+          if (selectedVideo && selectedVideo.videoId === vo.videoId) {
+            renderPlaylistDropdown(selectedVideo);
+          }
+        };
       }
-
-      document.getElementById("fav_" + vo.videoId).onclick = function () {
-        addToFavorites(vo);
-        updateFavoriteButton(vo.videoId);
-        updateAddToPlaylistButton(vo.videoId);
-      };
     })(videoObj);
-  }
-}
-
-function updateFavoriteButton(videoId) {
-  var btn = document.getElementById("fav_" + videoId);
-  if (!btn) return;
-
-  var added = isInFavorites(videoId);
-  btn.className = "btn btn-sm " + (added ? "btn-danger" : "btn-outline-danger");
-  btn.innerText = added ? "♥ Added ✓" : "♡ Add to Favorites";
-}
-
-function updateAddToPlaylistButton(videoId) {
-  var user = getCurrentUser();
-  if (!user) return;
-
-  var btn = document.getElementById("addpl_" + videoId);
-  if (!btn) return;
-
-  var already = isVideoInAnyPlaylist(user, videoId);
-  if (already) {
-    btn.className = "btn btn-sm btn-secondary btn-added";
-    btn.innerText = "Added ✓";
-    btn.disabled = true;
   }
 }
 
@@ -478,7 +548,7 @@ function updateAddToPlaylistButton(videoId) {
     setModalMsg("success", "Created and added to " + name + " ✓");
 
     renderPlaylistDropdown(selectedVideo);
-    updateAddToPlaylistButton(selectedVideo.videoId);
+    updateCardUI(selectedVideo.videoId);
   };
 
   var q0 = getQueryString();

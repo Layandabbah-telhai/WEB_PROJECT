@@ -67,22 +67,16 @@
   var prevBtn = document.getElementById("prevBtn");
   var nextBtn = document.getElementById("nextBtn");
 
-  document.getElementById("welcomeArea").innerText =
-    "Hello " + (currentUser.username || "");
+  document.getElementById("welcomeArea").innerText = "Hello " + (currentUser.username || "");
 
   var img = document.getElementById("userImg");
   img.src = currentUser.imageUrl || "";
-  img.onerror = function () {
-    img.style.display = "none";
-  };
+  img.onerror = function () { img.style.display = "none"; };
 
   function showToast(msg) {
     var toastBody = document.getElementById("toastBody");
     var toastEl = document.getElementById("toast");
-    if (!toastBody || !toastEl) {
-      alert(msg);
-      return;
-    }
+    if (!toastBody || !toastEl) { alert(msg); return; }
     toastBody.innerHTML = msg;
     new bootstrap.Toast(toastEl).show();
   }
@@ -91,11 +85,15 @@
     var params = new URLSearchParams(window.location.search);
     var pid = params.get("pid");
     if (pid === null) return null;
-
     var index = parseInt(pid, 10);
     if (isNaN(index)) return null;
-
     return index;
+  }
+
+  function setPidInUrl(pid) {
+    var url = new URL(window.location.href);
+    url.searchParams.set("pid", String(pid));
+    window.history.replaceState({}, "", url.toString());
   }
 
   function isoToSeconds(iso) {
@@ -113,6 +111,12 @@
     return h * 3600 + m * 60 + s;
   }
 
+  function toViews(v) {
+    var n = parseInt(String(v || "0").replace(/[^\d]/g, ""), 10);
+    if (isNaN(n)) return 0;
+    return n;
+  }
+
   function getFilteredSortedVideos(videos) {
     var list = (videos || []).slice();
 
@@ -123,13 +127,23 @@
       });
     }
 
-    if (sortSelect.value === "az") {
+    var mode = sortSelect.value;
+
+    if (mode === "az") {
       list.sort(function (a, b) {
         return String(a.title || "").localeCompare(String(b.title || ""));
       });
-    } else {
+    } else if (mode === "za") {
       list.sort(function (a, b) {
         return String(b.title || "").localeCompare(String(a.title || ""));
+      });
+    } else if (mode === "views_desc") {
+      list.sort(function (a, b) {
+        return toViews(b.views) - toViews(a.views);
+      });
+    } else if (mode === "views_asc") {
+      list.sort(function (a, b) {
+        return toViews(a.views) - toViews(b.views);
       });
     }
 
@@ -141,10 +155,7 @@
   var timer = null;
 
   function clearTimer() {
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
+    if (timer) { clearTimeout(timer); timer = null; }
   }
 
   function stopPlayerOnly() {
@@ -172,7 +183,7 @@
 
     videoTitleEl.innerText = v.title || "Player";
     videoPlayerEl.src =
-      "https://www.youtube.com/embed/" + v.videoId + "?autoplay=1";
+      "https://www.youtube.com/embed/" + v.videoId + "?autoplay=1&origin=" + encodeURIComponent(window.location.origin);
 
     var seconds = isoToSeconds(v.duration);
     if (seconds > 0) {
@@ -204,19 +215,14 @@
 
     var index = -1;
     for (var i = 0; i < pl.videos.length; i++) {
-      if (pl.videos[i].videoId === videoId) {
-        index = i;
-        break;
-      }
+      if (pl.videos[i].videoId === videoId) { index = i; break; }
     }
-
     if (index < 0) return;
 
     pl.videos.splice(index, 1);
     saveUser();
 
     stopPlayerOnly();
-
     renderSidebar(pid);
     renderPlaylist(pid);
 
@@ -227,15 +233,13 @@
     playlistList.innerHTML = "";
 
     if (!currentUser.playlists || currentUser.playlists.length === 0) {
-      playlistList.innerHTML =
-        '<li class="list-group-item text-muted">No playlists</li>';
+      playlistList.innerHTML = '<li class="list-group-item text-muted">No playlists</li>';
       return;
     }
 
     currentUser.playlists.forEach(function (pl, i) {
       var li = document.createElement("li");
-      li.className =
-        "list-group-item playlist-item" + (i === activeIndex ? " active" : "");
+      li.className = "list-group-item playlist-item" + (i === activeIndex ? " active" : "");
       li.innerText = pl.name;
 
       li.onclick = function () {
@@ -253,9 +257,7 @@
       playlistHeader.innerHTML = "<h4>Playlists</h4>";
       controls.classList.add("d-none");
       playPlaylistBtn.disabled = true;
-
-      songsArea.innerHTML =
-        '<div class="alert alert-info">Choose a playlist from the list.</div>';
+      songsArea.innerHTML = '<div class="alert alert-info">Choose a playlist from the list.</div>';
       return;
     }
 
@@ -271,11 +273,7 @@
     controls.classList.remove("d-none");
     playPlaylistBtn.disabled = false;
 
-    if (playlist.name === "Favorites") {
-      deletePlaylistBtn.disabled = true;
-    } else {
-      deletePlaylistBtn.disabled = false;
-    }
+    deletePlaylistBtn.disabled = playlist.name === "Favorites";
 
     var list = getFilteredSortedVideos(playlist.videos);
 
@@ -288,9 +286,9 @@
       var thumb =
         video.thumbnail ||
         video.thumb ||
-        (video.videoId
-          ? "https://i.ytimg.com/vi/" + video.videoId + "/hqdefault.jpg"
-          : "");
+        (video.videoId ? "https://i.ytimg.com/vi/" + video.videoId + "/hqdefault.jpg" : "");
+
+      var viewsText = String(video.views || "0");
 
       var card = document.createElement("div");
       card.className = "card shadow-sm mb-3";
@@ -302,7 +300,10 @@
         "</div>" +
         '<div class="col-md-8">' +
         '<div class="d-flex justify-content-between align-items-start gap-2">' +
-        '<h5 class="mb-2" style="cursor:pointer; flex:1;">' + (video.title || "") + "</h5>" +
+        '<div style="flex:1;">' +
+        '<h5 class="mb-1" style="cursor:pointer;">' + (video.title || "") + "</h5>" +
+        '<div class="text-muted small">Views: ' + viewsText + "</div>" +
+        "</div>" +
         '<button class="btn btn-sm btn-danger" id="rm_' + video.videoId + '">Remove</button>' +
         "</div>" +
         "</div>" +
@@ -314,10 +315,7 @@
 
         var idx = 0;
         for (var i = 0; i < playQueue.length; i++) {
-          if (playQueue[i].videoId === video.videoId) {
-            idx = i;
-            break;
-          }
+          if (playQueue[i].videoId === video.videoId) { idx = i; break; }
         }
         playByIndex(idx);
       };
@@ -325,9 +323,7 @@
       songsArea.appendChild(card);
 
       var rmBtn = document.getElementById("rm_" + video.videoId);
-      rmBtn.onclick = function () {
-        removeSongByVideoId(index, video.videoId);
-      };
+      rmBtn.onclick = function () { removeSongByVideoId(index, video.videoId); };
     });
   }
 
@@ -407,6 +403,11 @@
   saveUser();
 
   var initialPid = getPidFromUrl();
+  if (initialPid === null && currentUser.playlists && currentUser.playlists.length > 0) {
+    initialPid = 0;
+    setPidInUrl(0);
+  }
+
   renderSidebar(initialPid);
   renderPlaylist(initialPid);
 })();

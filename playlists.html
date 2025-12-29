@@ -9,44 +9,22 @@
 
   <style>
     body { background: #f6f7fb; }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      gap: 16px;
+    .user-pic{
+      width:40px;height:40px;border-radius:50%;
+      object-fit:cover;border:1px solid #e6e6e6;
     }
-    @media (max-width: 992px) {
-      .layout { grid-template-columns: 1fr; }
+    .thumb{
+      width:220px;max-width:100%;
+      border-radius:12px;border:1px solid #e6e6e6;
+      object-fit:cover;
     }
-
     .playlist-item { cursor: pointer; }
-    .playlist-item.active { background: #0d6efd; color: #fff; }
-
-    .thumb {
-      width: 220px;
-      max-width: 100%;
-      height: 124px;
-      object-fit: cover;
-      border-radius: 12px;
-      border: 1px solid #e6e6e6;
-      background: #fff;
-    }
-
-    .video-card { border-radius: 14px; }
-
-    .user-pic {
-      width: 40px; height: 40px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 1px solid #e6e6e6;
-    }
   </style>
 </head>
 
 <body>
   <div class="container py-4">
 
-    <!-- Top bar -->
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2 class="mb-0">Playlists</h2>
 
@@ -55,92 +33,85 @@
           <img id="userImg" class="user-pic" alt="user" />
           <div id="welcomeArea" class="text-muted"></div>
         </div>
-
         <a class="btn btn-outline-secondary btn-sm" href="search.html">Search</a>
         <button class="btn btn-outline-danger btn-sm" id="logoutBtn">Logout</button>
       </div>
     </div>
 
-    <div class="layout">
-      <!-- Sidebar -->
-      <div class="card shadow-sm p-3">
-        <h5 class="mb-3">My Playlists</h5>
-
-        <button class="btn btn-success w-100 mb-3" id="newPlaylistBtn">+ New Playlist</button>
-
-        <ul class="list-group" id="playlistList"></ul>
-      </div>
-
-      <!-- Main -->
-      <div class="card shadow-sm p-3">
-        <div id="playlistHeader" class="mb-2"></div>
-
-        <div id="playlistControls" class="mb-3 d-none">
-          <div class="row g-2 align-items-center">
-            <div class="col-md-6">
-              <input id="filterInput" class="form-control" placeholder="Search song by name..." />
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5 class="mb-3">הספרייה שלי</h5>
+            <div class="d-grid mb-2">
+              <button class="btn btn-success" id="newPlaylistBtn">+ פלייליסט חדש</button>
             </div>
-
-            <div class="col-md-3">
-              <select id="sortSelect" class="form-select">
-                <option value="az">Sort A-Z</option>
-                <option value="za">Sort Z-A</option>
-              </select>
+            <div class="d-grid mb-3">
+              <button class="btn btn-primary" id="playPlaylistBtn">Play Playlist</button>
             </div>
-
-            <div class="col-md-3 d-grid">
-              <button id="playPlaylistBtn" class="btn btn-primary">
-                ▶ Play Playlist
-              </button>
-            </div>
-          </div>
-
-          <div class="d-flex justify-content-end mt-2">
-            <button class="btn btn-danger btn-sm" id="deletePlaylistBtn">Delete Playlist</button>
+            <ul class="list-group" id="playlistList"></ul>
           </div>
         </div>
+      </div>
 
-        <div id="songsArea"></div>
+      <div class="col-lg-8">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div id="playlistHeader" class="mb-3"></div>
+
+            <div id="playlistControls" class="d-none mb-3">
+              <div class="row g-2 align-items-center">
+                <div class="col-md-6">
+                  <input id="filterInput" class="form-control" placeholder="Search in playlist..." />
+                </div>
+                <div class="col-md-4">
+                  <select id="sortSelect" class="form-select">
+                    <option value="az">A-Z</option>
+                    <option value="za">Z-A</option>
+                    <option value="views_desc">Views: High → Low</option>
+                    <option value="views_asc">Views: Low → High</option>
+                  </select>
+                </div>
+                <div class="col-md-2 d-grid">
+                  <button class="btn btn-outline-danger" id="deletePlaylistBtn">Delete</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="songsArea"></div>
+          </div>
+        </div>
       </div>
     </div>
+
   </div>
 
-  <!-- New Playlist Modal -->
   <div class="modal fade" id="newPlaylistModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
-
         <div class="modal-header">
-          <h5 class="modal-title">Create Playlist</h5>
-          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <h5 class="modal-title">New Playlist</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-
         <div class="modal-body">
           <input id="newPlaylistName" class="form-control" placeholder="Playlist name..." />
-          <div class="text-muted small mt-2">Names must be unique.</div>
         </div>
-
         <div class="modal-footer">
           <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button class="btn btn-success" id="createPlaylistBtn">Create</button>
         </div>
-
       </div>
     </div>
   </div>
 
-  <!-- Video Player Modal -->
   <div class="modal fade" id="videoModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
-
         <div class="modal-header">
           <h5 class="modal-title" id="videoTitle">Player</h5>
-          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-
         <div class="modal-body">
-          <!-- Simple iframe (no ratio class needed) -->
           <iframe
             id="videoPlayer"
             width="100%"
@@ -150,26 +121,20 @@
             allowfullscreen
           ></iframe>
         </div>
-
-        <div class="modal-footer d-flex justify-content-between">
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary" id="prevBtn">⏮ Prev</button>
-            <button class="btn btn-outline-secondary" id="nextBtn">Next ⏭</button>
-          </div>
-
-          <button class="btn btn-secondary" data-bs-dismiss="modal" id="closePlayerBtn">Close</button>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" id="prevBtn">Prev</button>
+          <button class="btn btn-outline-secondary" id="nextBtn">Next</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         </div>
-
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
   <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
     <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
       <div class="toast-header">
         <strong class="me-auto">Notification</strong>
-        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
       </div>
       <div class="toast-body" id="toastBody"></div>
     </div>
