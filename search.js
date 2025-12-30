@@ -1,4 +1,4 @@
-var API_KEY = "AIzaSyD-Ego8FzfrKWELsoQ-22LnNjlhR868i-E";
+var API_KEY = "API_KEY";
 var PAGE_SIZE = 50;
 
 var currentQuery = "";
